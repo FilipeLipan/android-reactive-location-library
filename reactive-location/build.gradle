@@ -42,7 +42,7 @@ repositories {
 }
 
 ext {
-  bintrayRepo = 'maven'
+  bintrayRepo = 'android'
   bintrayName = 'reactive-location'
 
   publishedGroupId = 'com.ninenine.reactivelocation'
@@ -52,7 +52,7 @@ ext {
   libraryDescription = 'A wrapper for FusedLocation'
 
   siteUrl = ''
-  gitUrl = ''
+  gitUrl = 'https://github.com/99taxis/android-reactive-location-library.git'
 
   libraryVersion = '0.0.1'
 
