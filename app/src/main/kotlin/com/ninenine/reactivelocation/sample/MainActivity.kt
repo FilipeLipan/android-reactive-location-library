@@ -14,7 +14,10 @@ class MainActivity : AppCompatActivity() {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
 
-    LocationManager(FusedLocationApiProvider(this)).connect().subscribe(
+    val fusedLocationApi = FusedLocationApiProvider(this)
+    fusedLocationApi.connect()
+
+    LocationManager(fusedLocationApi).connect().subscribe(
         { location -> Log.d(TAG, "Location: ${location.latitude}, ${location.longitude}") },
         { error -> Log.e(TAG, "Error: ${error.message}") },
         { Log.d(TAG, "Completed") }
