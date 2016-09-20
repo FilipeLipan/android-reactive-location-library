@@ -70,9 +70,10 @@ class LocationManager(
     }
 
     fun stopEmitting() {
+      locationApi.unregisterConnectionCallbacks(this)
+      locationApi.unregisterConnectionFailedListener(this)
+
       if (locationApi.isConnected()) {
-        locationApi.unregisterConnectionCallbacks(this)
-        locationApi.unregisterConnectionFailedListener(this)
         stopLocationUpdates()
       }
     }

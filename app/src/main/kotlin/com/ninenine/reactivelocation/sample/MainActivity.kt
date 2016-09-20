@@ -67,7 +67,6 @@ class MainActivity : AppCompatActivity() {
           startListeningToLocation()
         }
       }
-
     }
   }
 
