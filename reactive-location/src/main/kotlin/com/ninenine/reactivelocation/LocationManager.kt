@@ -7,8 +7,8 @@ import com.google.android.gms.common.api.GoogleApiClient
 import com.google.android.gms.location.LocationListener
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationSettingsStatusCodes
+import rx.AsyncEmitter
 import rx.Observable
-import rx.subjects.PublishSubject
 import java.util.concurrent.atomic.AtomicInteger
 
 class LocationManager(
@@ -18,102 +18,71 @@ class LocationManager(
   companion object {
     val DEFAULT_REQUEST: LocationRequest = LocationRequest.create()
         .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
-        .setInterval(1000)
+        .setInterval(5000)
   }
 
-  private val registeredRequests: MutableMap<Int, LocationConnectionHandler> = mutableMapOf()
+  private val observers = AtomicInteger(0)
 
-  fun connect(
+  fun streamForRequest(
       request: LocationRequest = DEFAULT_REQUEST
   ): Observable<Location> {
-    val cachedAdapter = registeredRequests[request.hashCode()]
-    val adapter = cachedAdapter ?: createAdapter(request)
-
-    return adapter.observable()
-        .doOnSubscribe {
-          registerAdapter(request, adapter)
-        }
-        .doOnError {
-          disposeAdapter(request)
-        }
-        .doOnCompleted {
-          disposeAdapter(request)
-        }
+    return Observable.fromEmitter<Location>({ asyncEmitter ->
+      LocationEmitterHandler(locationApi, asyncEmitter, request)
+    }, AsyncEmitter.BackpressureMode.LATEST)
+    .doOnSubscribe { addingObserver() }
+    .doOnUnsubscribe { removingObserver() }
   }
 
-  private fun registerAdapter(request: LocationRequest, adapter: LocationConnectionHandler) {
-    registeredRequests.put(request.hashCode(), adapter)
+  private fun addingObserver() {
+    if (observers.incrementAndGet() >= 0 && !locationApi.isConnected()) {
+      locationApi.connect()
+    }
   }
 
-  private fun disposeAdapter(request: LocationRequest) {
-    registeredRequests.remove(request.hashCode())
-    if (registeredRequests.isEmpty()) {
+  private fun removingObserver() {
+    if (observers.decrementAndGet() <= 0) {
       locationApi.disconnect()
     }
   }
 
-  private fun createAdapter(request: LocationRequest): LocationConnectionHandler {
-    return LocationConnectionHandler(locationApi, request)
-  }
-
-  private class LocationConnectionHandler(
+  private class LocationEmitterHandler(
       private val locationApi: LocationApiProvider,
+      private val asyncEmitter: AsyncEmitter<Location>,
       private val request: LocationRequest
   ) : LocationListener,
       GoogleApiClient.OnConnectionFailedListener,
       GoogleApiClient.ConnectionCallbacks {
 
-    private val subject: PublishSubject<Location>
-    private val connections = AtomicInteger(0)
-
     init {
-      subject = PublishSubject.create<Location>()
       locationApi.registerConnectionCallbacks(this)
       locationApi.registerConnectionFailedListener(this)
-    }
 
-    fun observable(): Observable<Location> {
-      return subject.onBackpressureLatest()
-          .doOnSubscribe {
-            newConnection()
-          }
-          .doOnUnsubscribe {
-            connectionClosed()
-          }
-    }
-
-    private fun newConnection() {
-      connections.incrementAndGet()
-
-      connect()
-    }
-
-    private fun connectionClosed() {
-      if (connections.decrementAndGet() == 0) {
-        subject.onCompleted()
-        disconnect()
+      asyncEmitter.setCancellation {
+        stopEmitting()
       }
     }
 
-    private fun connect() {
-      if (!locationApi.isConnected()) {
-        locationApi.connect()
-      } else {
-        locationApiConnected()
+    private fun stopEmitting() {
+      if (locationApi.isConnected()) {
+        locationApi.unregisterConnectionCallbacks(this)
+        locationApi.unregisterConnectionFailedListener(this)
+        stopLocationUpdates()
       }
     }
 
-    private fun disconnect() {
-      locationApi.unregisterConnectionCallbacks(this)
-      locationApi.unregisterConnectionFailedListener(this)
-      stopLocationUpdates()
+    private fun dispatchNext(location: Location) {
+      asyncEmitter.onNext(location)
+    }
+
+    private fun dispatchError(error: LocationConnectionException) {
+      asyncEmitter.onError(error)
     }
 
     override fun onLocationChanged(location: Location?) {
-      location?.let { subject.onNext(location) }
+      location?.let { dispatchNext(it) }
     }
 
-    override fun onConnected(connectionHint: Bundle?) {
+    override fun onConnected(hint: Bundle?) {
       locationApiConnected()
     }
 
@@ -142,10 +111,6 @@ class LocationManager(
           else -> dispatchError(LocationSettingsException(result))
         }
       }
-    }
-
-    private fun dispatchError(error: LocationConnectionException) {
-      subject.onError(error)
     }
 
     private fun locationSettingsApproved() {
