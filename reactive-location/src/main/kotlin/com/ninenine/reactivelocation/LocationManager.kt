@@ -27,10 +27,15 @@ class LocationManager(
       request: LocationRequest = DEFAULT_REQUEST
   ): Observable<Location> {
     return Observable.fromEmitter<Location>({ asyncEmitter ->
-      LocationEmitterHandler(locationApi, asyncEmitter, request)
+      val emitterHandler = LocationEmitterHandler.startEmitting(locationApi, asyncEmitter, request)
+
+      asyncEmitter.setCancellation {
+        emitterHandler.stopEmitting()
+      }
+
     }, AsyncEmitter.BackpressureMode.LATEST)
-    .doOnSubscribe { addingObserver() }
-    .doOnUnsubscribe { removingObserver() }
+        .doOnSubscribe { addingObserver() }
+        .doOnUnsubscribe { removingObserver() }
   }
 
   private fun addingObserver() {
@@ -45,7 +50,7 @@ class LocationManager(
     }
   }
 
-  private class LocationEmitterHandler(
+  private class LocationEmitterHandler private constructor(
       private val locationApi: LocationApiProvider,
       private val asyncEmitter: AsyncEmitter<Location>,
       private val request: LocationRequest
@@ -53,16 +58,18 @@ class LocationManager(
       GoogleApiClient.OnConnectionFailedListener,
       GoogleApiClient.ConnectionCallbacks {
 
-    init {
-      locationApi.registerConnectionCallbacks(this)
-      locationApi.registerConnectionFailedListener(this)
-
-      asyncEmitter.setCancellation {
-        stopEmitting()
+    companion object {
+      fun startEmitting(
+          locationApi: LocationApiProvider,
+          asyncEmitter: AsyncEmitter<Location>,
+          request: LocationRequest
+      ) = LocationEmitterHandler(locationApi, asyncEmitter, request).apply {
+        locationApi.registerConnectionCallbacks(this)
+        locationApi.registerConnectionFailedListener(this)
       }
     }
 
-    private fun stopEmitting() {
+    fun stopEmitting() {
       if (locationApi.isConnected()) {
         locationApi.unregisterConnectionCallbacks(this)
         locationApi.unregisterConnectionFailedListener(this)
