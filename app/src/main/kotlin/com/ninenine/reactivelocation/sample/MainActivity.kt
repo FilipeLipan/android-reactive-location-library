@@ -18,7 +18,7 @@ class MainActivity : AppCompatActivity() {
   val TAG = "Reactive Location"
   val REQUEST_CODE_LOCATION_EXCEPTION = 1
 
-  val fusedLocationApi by lazy { FusedLocationApiProvider(this) }
+  val fusedLocationApi by lazy { FusedLocationApiProvider() }
 
   var subscription: Subscription? = null
 
@@ -39,7 +39,7 @@ class MainActivity : AppCompatActivity() {
 
   fun startListeningToLocation() {
     val manager = LocationManager(fusedLocationApi)
-    subscription = manager.streamForRequest().subscribe(
+    subscription = manager.streamForRequest(this).subscribe(
         { location ->
           val text = "Location: ${location.latitude}, ${location.longitude}"
           val lastLocation = findViewById(R.id.lastLocation) as TextView
