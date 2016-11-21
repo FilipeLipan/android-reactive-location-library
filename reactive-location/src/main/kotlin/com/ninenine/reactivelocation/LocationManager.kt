@@ -1,5 +1,6 @@
 package com.ninenine.reactivelocation
 
+import android.content.Context
 import android.location.Location
 import android.os.Bundle
 import com.google.android.gms.common.ConnectionResult
@@ -9,6 +10,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationSettingsStatusCodes
 import rx.AsyncEmitter
 import rx.Observable
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class LocationManager(
@@ -24,6 +26,7 @@ class LocationManager(
   private val observers = AtomicInteger(0)
 
   fun streamForRequest(
+      context: Context,
       request: LocationRequest = DEFAULT_REQUEST
   ): Observable<Location> {
     return Observable.fromEmitter<Location>({ asyncEmitter ->
@@ -34,13 +37,13 @@ class LocationManager(
       }
 
     }, AsyncEmitter.BackpressureMode.LATEST)
-        .doOnSubscribe { addingObserver() }
+        .doOnSubscribe { addingObserver(context) }
         .doOnUnsubscribe { removingObserver() }
   }
 
-  private fun addingObserver() {
+  private fun addingObserver(context: Context) {
     if (observers.incrementAndGet() >= 0 && !locationApi.isConnected()) {
-      locationApi.connect()
+      locationApi.connect(context)
     }
   }
 
@@ -58,18 +61,11 @@ class LocationManager(
       GoogleApiClient.OnConnectionFailedListener,
       GoogleApiClient.ConnectionCallbacks {
 
-    companion object {
-      fun startEmitting(
-          locationApi: LocationApiProvider,
-          asyncEmitter: AsyncEmitter<Location>,
-          request: LocationRequest
-      ) = LocationEmitterHandler(locationApi, asyncEmitter, request).apply {
-        locationApi.registerConnectionCallbacks(this)
-        locationApi.registerConnectionFailedListener(this)
-      }
-    }
+    private val alive: AtomicBoolean = AtomicBoolean(true)
 
     fun stopEmitting() {
+      alive.set(false)
+
       locationApi.unregisterConnectionCallbacks(this)
       locationApi.unregisterConnectionFailedListener(this)
 
@@ -78,32 +74,40 @@ class LocationManager(
       }
     }
 
+    override fun onLocationChanged(location: Location?) {
+      if (isAlive()) {
+        location?.let { dispatchNext(it) }
+      }
+    }
+
+    override fun onConnected(hint: Bundle?) {
+      if (isAlive()) {
+        locationApiConnected()
+      }
+    }
+
+    override fun onConnectionSuspended(cause: Int) {
+      if (isAlive()) {
+        dispatchError(GoogleApiConnectionSuspendedException())
+      }
+    }
+
+    override fun onConnectionFailed(result: ConnectionResult) {
+      if (isAlive()) {
+        dispatchError(GoogleApiConnectException(result))
+      }
+    }
+
+    private fun locationApiConnected() {
+      checkLocationSettings()
+    }
+
     private fun dispatchNext(location: Location) {
       asyncEmitter.onNext(location)
     }
 
     private fun dispatchError(error: LocationConnectionException) {
       asyncEmitter.onError(error)
-    }
-
-    override fun onLocationChanged(location: Location?) {
-      location?.let { dispatchNext(it) }
-    }
-
-    override fun onConnected(hint: Bundle?) {
-      locationApiConnected()
-    }
-
-    override fun onConnectionSuspended(cause: Int) {
-      dispatchError(GoogleApiConnectionSuspendedException())
-    }
-
-    override fun onConnectionFailed(result: ConnectionResult) {
-      dispatchError(GoogleApiConnectException(result))
-    }
-
-    private fun locationApiConnected() {
-      checkLocationSettings()
     }
 
     private fun checkLocationSettings() {
@@ -131,6 +135,21 @@ class LocationManager(
 
     private fun stopLocationUpdates() {
       locationApi.removeLocationUpdates(this)
+    }
+
+    private fun isAlive(): Boolean {
+      return alive.get()
+    }
+
+    companion object {
+      fun startEmitting(
+          locationApi: LocationApiProvider,
+          asyncEmitter: AsyncEmitter<Location>,
+          request: LocationRequest
+      ) = LocationEmitterHandler(locationApi, asyncEmitter, request).apply {
+        locationApi.registerConnectionCallbacks(this)
+        locationApi.registerConnectionFailedListener(this)
+      }
     }
   }
 
