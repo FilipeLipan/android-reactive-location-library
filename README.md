@@ -27,13 +27,13 @@ override fun onStop() {
 }
 
 private fun startListeningForLocations() {
-  val locationApiProvider = FusedLocationApiProvider(this)
+  val locationApiProvider = FusedLocationApiProvider()
   val locationManager = LocationManager(locationApiProvider)
   val locationRequest = LocationRequest.create()
         .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
         .setInterval(1000)
 
-  subscription = locationManager.streamForRequest(locationRequest).subscribe(
+  subscription = locationManager.streamForRequest(this, locationRequest).subscribe(
     { location ->
         // use locations as pleased
     },
@@ -68,7 +68,7 @@ Grab via Maven:
 <dependency>
   <groupId>com.ninenine.reactivelocation</groupId>
   <artifactId>reactive-location</artifactId>
-  <version>0.0.1</version>
+  <version>0.0.2</version>
   <type>pom</type>
 </dependency>
 ```
