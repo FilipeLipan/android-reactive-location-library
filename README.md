@@ -78,7 +78,7 @@ repositories {
   maven { url 'http://dl.bintray.com/99/android' }
 }
 
-compile 'com.ninenine.reactivelocation:reactive-location:0.0.1'
+compile 'com.ninenine.reactivelocation:reactive-location:0.0.2'
 ```
 
 Reactive-location requires at minimum Android 2.3.
