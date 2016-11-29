@@ -10,6 +10,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationSettingsStatusCodes
 import rx.AsyncEmitter
 import rx.Observable
+import java.lang.ref.SoftReference
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -55,13 +56,14 @@ class LocationManager(
 
   private class LocationEmitterHandler private constructor(
       private val locationApi: LocationApiProvider,
-      private val asyncEmitter: AsyncEmitter<Location>,
-      private val request: LocationRequest
+      private val request: LocationRequest,
+      asyncEmitter: AsyncEmitter<Location>
   ) : LocationListener,
       GoogleApiClient.OnConnectionFailedListener,
       GoogleApiClient.ConnectionCallbacks {
 
     private val alive: AtomicBoolean = AtomicBoolean(true)
+    private val asyncEmitter: SoftReference<AsyncEmitter<Location>> = SoftReference(asyncEmitter)
 
     fun stopEmitting() {
       alive.set(false)
@@ -72,6 +74,8 @@ class LocationManager(
       if (locationApi.isConnected()) {
         stopLocationUpdates()
       }
+
+      clearResources()
     }
 
     override fun onLocationChanged(location: Location?) {
@@ -103,11 +107,11 @@ class LocationManager(
     }
 
     private fun dispatchNext(location: Location) {
-      asyncEmitter.onNext(location)
+      asyncEmitter.get()?.onNext(location)
     }
 
     private fun dispatchError(error: LocationConnectionException) {
-      asyncEmitter.onError(error)
+      asyncEmitter.get()?.onError(error)
     }
 
     private fun checkLocationSettings() {
@@ -141,12 +145,16 @@ class LocationManager(
       return alive.get()
     }
 
+    private fun clearResources() {
+      asyncEmitter.clear()
+    }
+
     companion object {
       fun startEmitting(
           locationApi: LocationApiProvider,
           asyncEmitter: AsyncEmitter<Location>,
           request: LocationRequest
-      ) = LocationEmitterHandler(locationApi, asyncEmitter, request).apply {
+      ) = LocationEmitterHandler(locationApi, request, asyncEmitter).apply {
         locationApi.registerConnectionCallbacks(this)
         locationApi.registerConnectionFailedListener(this)
       }
