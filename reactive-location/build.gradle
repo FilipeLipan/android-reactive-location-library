@@ -54,7 +54,7 @@ ext {
   siteUrl = ''
   gitUrl = 'https://github.com/99taxis/android-reactive-location-library.git'
 
-  libraryVersion = '0.0.2'
+  libraryVersion = '0.0.3'
 
   developerId = 'philipesteiff'
   developerName = 'Philipe Steiff'
