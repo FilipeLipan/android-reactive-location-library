@@ -22,7 +22,9 @@ class RequestSettingsActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeList
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_request_settings)
 
-    intervalSeconds.text = getSharedPreferences(packageName, Context.MODE_PRIVATE).getInt(SETTINGS_INTERVAL, 1).toString()
+    val interval = getSharedPreferences(packageName, Context.MODE_PRIVATE).getInt(SETTINGS_INTERVAL, 1)
+    intervalSeconds.text = interval.toString()
+    seekBar.progress = interval
     seekBar.setOnSeekBarChangeListener(this)
     saveButton.setOnClickListener {
       saveSecondsInterval()
