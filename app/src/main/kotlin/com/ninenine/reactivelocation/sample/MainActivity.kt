@@ -63,7 +63,7 @@ class MainActivity : AppCompatActivity() {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     if (requestCode == REQUEST_CODE_LOCATION_EXCEPTION) {
       permissions.forEachIndexed { index, permission ->
-        if (permission.equals(Manifest.permission.ACCESS_FINE_LOCATION) && grantResults[index] == PackageManager.PERMISSION_GRANTED) {
+        if (permission == Manifest.permission.ACCESS_FINE_LOCATION && grantResults[index] == PackageManager.PERMISSION_GRANTED) {
           startListeningToLocation()
         }
       }
